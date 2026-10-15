@@ -44,7 +44,7 @@ Build a 1.44 MB raw floppy image:
 make
 ```
 
-The output is `build/britva-os.img`. This is a legacy BIOS floppy image, not an ISO and not a UEFI boot image.
+The output is `build/britva-os.img`. This is a legacy BIOS floppy image, not an ISO and not a UEFI boot image. A compressed v0.1.0 image and checksum are available under [`release-assets/`](release-assets/README.md); decompress and verify them using the instructions there.
 
 Boot with a VGA window and a mirrored serial console:
 
