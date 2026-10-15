@@ -1,94 +1,71 @@
 # Britva OS
 
-**Britva OS** is a tiny, bootable 32-bit x86 hobby OS made for learning how a computer starts. A real-mode GNU Assembly boot sector loads a freestanding C++ kernel, which switches to protected mode and opens a small VGA/serial command console. A safe Python shell simulation and an interactive browser preview are included too.
+Britva OS is a **bare-metal 32-bit x86 operating-system prototype** written in freestanding C++ and GNU Assembly. The build produces a legacy-BIOS floppy image whose boot sector loads the kernel, enters protected mode, and hands off to the kernel's exception/IRQ, timer, keyboard, memory, VGA, and serial code.
 
-> **Status:** early educational prototype (`0.1.0`). It is BIOS/legacy-BIOS only, has no filesystem or multitasking, and is not intended as a daily-use operating system.
+This is real OS source and a buildable disk image—not a web mockup or a desktop OS. QEMU is not installed in this workspace, so the image's actual boot has not been verified here. It is an educational prototype, not a general-purpose system.
 
-## Previews
+## Implemented in v0.2.0
 
-### Kernel console
+- BIOS boot sector reads the kernel from a 1.44 MB floppy using CHS, queries conventional/extended memory, enables A20, loads a flat GDT, and enters 32-bit protected mode.
+- Freestanding i386 C++ kernel with its own entry point, stack, and `.bss` initialization.
+- IDT exception handlers for vectors 0–31; fatal exceptions print their vector and halt.
+- 8259 PIC remap, 100 Hz PIT timer IRQ, uptime counter, and interrupt-driven PS/2 keyboard input.
+- Interrupt-driven COM1 receive (IRQ4) and serial output for headless VMs.
+- VGA 80×25 text console with hardware cursor, scrolling, and selectable text colors.
+- Simple bitmap-based 4 KiB physical page-frame allocator, initialized from BIOS-reported RAM; `palloc` and `pfree` exercise it.
+- Small embedded **read-only RAM filesystem** with `README.TXT`, `MOTD.TXT`, and `LIMITS.TXT`.
+- Interactive kernel shell: `help`, `about`, `version`, `uname`, `whoami`, `mem`, `uptime`, `palloc`, `pfree`, `echo`, `ls`, `cat`, `color`, `clear`, `reboot`, and `halt`.
+- Python reference shell simulator with the same command vocabulary where host-side behavior can be represented safely. It is not presented as a Python kernel.
 
-![Rendered visual preview of the Britva OS kernel console](screenshots/boot-console-preview.png)
-
-### Python edition
-
-![Rendered visual preview of the Python host simulation](screenshots/python-edition-preview.png)
-
-These are **rendered UI previews, not screenshots captured from a QEMU boot**; editable SVG sources sit beside the PNGs. The bootable image is built below, and QEMU is not bundled with this repository. The browser demo is also a UI/shell preview, not a hardware emulator.
-
-## What is in the repository?
-
-- **Assembly boot sector** (`boot/boot.S`): BIOS floppy CHS reads, A20 enable, flat GDT, and 32-bit protected-mode handoff.
-- **C++ kernel** (`kernel/`): freestanding i386 code; VGA text output, COM1 serial mirror/input, polled US-layout PS/2 keyboard, and a small shell.
-- **Python edition** (`python/britva.py`): matching educational commands in a safe host-side simulator. It never invokes host shell commands or reboots the host.
-- **Browser preview** (`preview/index.html`): a self-contained interactive demo with no external assets or dependencies.
-
-The kernel currently supports `help`, `about`, `version`, `uname`, `whoami`, `mem`, `echo`, `ls`, `cat`, `color`, `clear`, and `reboot`. A few hardware-related commands intentionally report that the feature is not implemented yet.
-
-## Build the boot image
+## Build and run
 
 ### Requirements
 
-- Linux x86 host with GNU `g++`, GNU binutils (`as`, `ld`, `objcopy`), GNU Make, and Python 3.
-- QEMU (`qemu-system-i386`) to boot the image. QEMU is optional for building and testing the Python edition.
+GNU Make, GNU C++ (`g++`), GNU binutils (`as`, `ld`, `objcopy`), Python 3, and QEMU (`qemu-system-i386`) to run the OS. The 32-bit kernel is freestanding; it does not need 32-bit host libraries.
 
-On Debian/Ubuntu, for example:
+On Debian/Ubuntu:
 
 ```sh
 sudo apt install build-essential binutils make python3 qemu-system-x86
 ```
 
-Build a 1.44 MB raw floppy image:
+Build the 1.44 MB BIOS floppy image:
 
 ```sh
 make
 ```
 
-The output is `build/britva-os.img`. This is a legacy BIOS floppy image, not an ISO and not a UEFI boot image. A compressed v0.1.0 image and checksum are available under [`release-assets/`](release-assets/README.md); decompress and verify them using the instructions there.
+Output: `build/britva-os.img`. A compressed v0.2.0 image and checksum are in [`release-assets/`](release-assets/README.md).
 
-Boot with a VGA window and a mirrored serial console:
+Start QEMU with the VGA console and mirrored serial terminal:
 
 ```sh
 make run
 ```
 
-Or use the terminal-backed COM1 console:
+Or use the serial console in the current terminal:
 
 ```sh
 make run-serial
 ```
 
-In the serial run, type commands into the terminal; use **Ctrl+A**, then **X** to quit QEMU.
+The serial terminal accepts shell commands. Press **Ctrl+A**, then **X** to quit QEMU.
 
-## Python edition
+Boot and exercise the COM1 shell automatically:
+
+```sh
+make qemu-test
+```
+
+## Python reference simulator
 
 ```sh
 python3 python/britva.py
-```
-
-Run one command without entering the interactive shell:
-
-```sh
 python3 python/britva.py --command "echo Hello from Britva"
-```
-
-Show a short scripted demo:
-
-```sh
 python3 python/britva.py --demo
 ```
 
-The Python edition is a command-shell simulation—not a Python kernel—and is intentionally isolated from the host OS.
-
-## Browser preview
-
-Start a local static server:
-
-```sh
-make preview
-```
-
-Then open `http://localhost:4173`. The page's command responses are simulated in the browser; it does not emulate the CPU or access the host machine.
+This only runs a shell reference simulator in the host Python process. It does not boot or emulate the C++ kernel, read host memory, execute host commands, or reboot the host.
 
 ## Tests
 
@@ -96,15 +73,13 @@ Then open `http://localhost:4173`. The page's command responses are simulated in
 make test
 ```
 
-The tests cover the Python shell and raw-image builder. With QEMU installed, `make qemu-test` boots the image and checks that the COM1 shell answers commands; `make run-serial` starts an interactive session.
+The tests cover the Python command model and floppy-image builder. The QEMU smoke test requires `qemu-system-i386`; run `make qemu-test` to verify an actual VM boot and shell response.
 
-## Current limitations
+## Current limits
 
-- 32-bit x86 and legacy BIOS only; no UEFI, paging, interrupts, user mode, scheduler, or filesystem.
-- The boot sector reads a fixed 64-sector kernel window; the build rejects a kernel that exceeds it.
-- The shell uses polling input and supports a basic US-layout PS/2 keyboard.
-- The kernel does not yet receive a BIOS memory map, so `mem` reports that information as unavailable.
-- `reboot` is implemented only in the bare-metal kernel; the Python edition reports that it cannot reset the host.
+Britva OS is intentionally an early, text-mode kernel. It currently has **no** paging/virtual memory, ring-3/user mode, scheduler or multitasking, persistent disk filesystem, process loader, networking, graphics stack, USB, or UEFI boot. The page allocator is deliberately basic: it uses a bitmap over the contiguous range reported by legacy BIOS `INT 15h/AH=88h`, not an E820 map, and the kernel has not enabled paging. The embedded RAM filesystem is compiled into the kernel and is read-only.
+
+No synthetic screenshots or browser UI are used as proof of operation. A real screenshot should be captured from the OS in QEMU (or on hardware); this checkout has no QEMU executable, so the VM boot smoke test and real screen capture cannot be run here. Use `make qemu-test` and `make run` on a machine with QEMU installed.
 
 ## License
 

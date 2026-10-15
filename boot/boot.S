@@ -70,6 +70,24 @@ load_kernel_sector:
     jmp load_kernel_sector
 
 kernel_loaded:
+    /* Preserve basic BIOS memory values at 0x500 for the kernel. */
+    pushw %ds
+    int $0x12
+    popw %ds
+    movw %ax, 0x0500            /* conventional memory in KiB */
+
+    pushw %ds
+    movb $0x88, %ah
+    sti
+    int $0x15
+    cli
+    popw %ds
+    jc memory_query_failed
+    movw %ax, 0x0502            /* extended memory above 1 MiB in KiB */
+    jmp memory_query_done
+memory_query_failed:
+    movw $0, 0x0502
+memory_query_done:
     /* Enable A20 before entering protected mode. */
     inb $0x92, %al
     orb $0x02, %al

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import selectors
 import shutil
 import subprocess
@@ -71,10 +72,30 @@ def smoke_test(image: Path, qemu: str) -> None:
         wait_for(b"britva@kernel:~$ ", "kernel boot")
         process.stdin.write(b"echo BOOT_OK\r")
         process.stdin.flush()
-        wait_for(b"BOOT_OK", "echo command")
+        wait_for(b"BOOT_OK\r\nbritva@kernel:~$", "echo command")
         process.stdin.write(b"uname\r")
         process.stdin.flush()
-        wait_for(b"Britva 0.1.0 i386", "uname command")
+        wait_for(b"Britva 0.2.0 i386", "uname command")
+
+        time.sleep(1.1)
+        process.stdin.write(b"uptime\r")
+        process.stdin.flush()
+        wait_for(b"Uptime: ", "PIT uptime")
+        uptime_match = re.search(rb"Uptime: ([0-9]+) seconds", output)
+        if uptime_match is None or int(uptime_match.group(1)) < 1:
+            raise RuntimeError("PIT did not advance the uptime counter")
+
+        process.stdin.write(b"palloc\r")
+        process.stdin.flush()
+        wait_for(b"Allocated 4 KiB page at 0x", "physical page allocation")
+        match = re.search(rb"Allocated 4 KiB page at 0x([0-9a-f]+)", output)
+        if match is None:
+            raise RuntimeError("page allocator did not print an address")
+        address = match.group(1)
+
+        process.stdin.write(b"pfree 0x" + address + b"\r")
+        process.stdin.flush()
+        wait_for(b"Physical page released.", "physical page release")
     finally:
         selector.close()
         if process.poll() is None:
@@ -85,7 +106,7 @@ def smoke_test(image: Path, qemu: str) -> None:
                 process.kill()
                 process.wait(timeout=3)
 
-    print("QEMU boot smoke test passed: prompt, echo, and uname responded over COM1.")
+    print("QEMU smoke test passed: serial shell, PIT uptime, and physical page alloc/free.")
 
 
 def main() -> int:

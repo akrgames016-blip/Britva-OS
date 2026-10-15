@@ -21,7 +21,8 @@ class BritvaShellTests(unittest.TestCase):
     def test_help_lists_supported_commands(self) -> None:
         result = self.shell.execute("help")
         self.assertIn("  about                About Britva OS", result)
-        self.assertIn("  reboot               Restart (kernel edition only)", result)
+        self.assertIn("  uptime               Show time since boot", result)
+        self.assertIn("  halt                 Halt (kernel edition only)", result)
 
     def test_identity_commands(self) -> None:
         self.assertEqual(self.shell.execute("version"), [
@@ -29,6 +30,17 @@ class BritvaShellTests(unittest.TestCase):
         ])
         self.assertEqual(self.shell.execute("uname"), [f"Britva {VERSION} i386"])
         self.assertEqual(self.shell.execute("whoami"), ["root"])
+
+    def test_uptime_is_reported_by_the_python_simulator(self) -> None:
+        result = self.shell.execute("uptime")
+        self.assertRegex(result[0], r"^Simulator uptime: \d+ seconds$")
+
+    def test_page_commands_are_explicitly_simulated(self) -> None:
+        result = self.shell.execute("palloc")[0]
+        self.assertIn("no host physical memory is reserved", result)
+        self.assertIn("Simulator page handles: 1", self.shell.execute("mem")[0])
+        self.assertEqual(self.shell.execute("pfree 0x1000000"), ["Simulator page handle released."])
+        self.assertIn("Unknown simulator page handle", self.shell.execute("pfree 0x1000000")[0])
 
     def test_echo_preserves_text(self) -> None:
         self.assertEqual(self.shell.execute("echo hello, Britva!"), ["hello, Britva!"])
@@ -38,9 +50,9 @@ class BritvaShellTests(unittest.TestCase):
         self.assertEqual(self.shell.execute("UNAME"), [f"Britva {VERSION} i386"])
 
     def test_virtual_files(self) -> None:
-        self.assertEqual(self.shell.execute("ls"), ["README.txt  MOTD.txt"])
-        self.assertIn("Boot path: BIOS -> Assembly -> C++ kernel.", self.shell.execute("cat readme.txt"))
-        self.assertEqual(self.shell.execute("cat missing.txt"), ["Usage: cat README.txt | MOTD.txt"])
+        self.assertEqual(self.shell.execute("ls"), ["README.TXT  MOTD.TXT  LIMITS.TXT"])
+        self.assertIn("BIOS loader -> protected mode", self.shell.execute("cat readme.txt")[1])
+        self.assertEqual(self.shell.execute("cat missing.txt"), ["File not found: missing.txt"])
 
     def test_color_updates_only_for_supported_names(self) -> None:
         self.assertEqual(self.shell.execute("color green"), ["Console color updated."])
