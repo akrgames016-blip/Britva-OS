@@ -1,0 +1,12 @@
+# Compiled kernel, boot sector, and disk image
+/build/
+
+# Python cache / test output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local editor and OS files
+.DS_Store
+.idea/
+.vscode/
